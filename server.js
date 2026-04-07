@@ -18,6 +18,10 @@ app.post("/horoscope", async (req, res) => {
       return res.status(400).json({ error: "sign ve type gerekli" });
     }
 
+    if (!process.env.CLAUDE_API_KEY) {
+      return res.status(500).json({ error: "CLAUDE_API_KEY missing on server" });
+    }
+
     const prompt = `
 You are a gifted, poetic astrologer.
 
@@ -57,18 +61,34 @@ Write the horoscope now.
 
     const data = await response.json();
 
+    console.log("Claude raw response:", JSON.stringify(data, null, 2));
+
     if (!response.ok) {
       return res.status(response.status).json({
-        error: data?.error?.message || "Claude API hatası"
+        error: data?.error?.message || "Claude API hatası",
+        raw: data
       });
     }
 
-    const text =
-      data?.content?.map(block => block?.text || "").join("").trim() ||
-      "Yanıt alınamadı.";
+    let text = "";
+
+    if (Array.isArray(data?.content)) {
+      text = data.content
+        .map(block => block?.text || "")
+        .join("")
+        .trim();
+    }
+
+    if (!text) {
+      return res.status(500).json({
+        error: "Claude returned empty text",
+        raw: data
+      });
+    }
 
     res.json({ text });
   } catch (error) {
+    console.error("Server error:", error);
     res.status(500).json({
       error: error.message || "Sunucu hatası"
     });
